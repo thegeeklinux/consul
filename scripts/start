@@ -1,0 +1,25 @@
+#!/bin/bash
+
+echo "--> consul start script running..." 
+envtpl /config/config.json.tpl --allow-missing --keep-template
+if grep -q @@RECURSORS@@ "/config/config.json"; then
+	nameservers=$(cat /etc/resolv.conf  | grep -v '^#' | grep nameserver | awk '{print $2}')
+	recursors=""
+	index=0
+	for nameserver in $nameservers; do
+        	if [[ "$nameserver" != "127.0.0.1" ]]; then
+                	if [ $index -ne 0 ]; then
+                        	recursors=${recursors}","
+	                fi
+        	        recursors=${recursors}'"'${nameserver}'"'
+                	((index+=1))
+	        fi
+	done
+	if [ -z ${recursors} ]; then
+		sed "/@@RECURSORS@@/d" /config/config.json
+	else
+		sed -i "s/@@RECURSORS@@/${recursors}/g" /config/config.json
+	fi
+fi
+envtpl /etc/supervisor/conf.d/consul.conf.tpl --allow-missing --keep-template
+exec /usr/bin/supervisord -n
